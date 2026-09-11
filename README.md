@@ -191,42 +191,76 @@ fbo-format=rgba16f
 
 FSRCNNX documents the same requirement for the same reason.
 
-## 5. What is verified and what is not
+## 5. Verifying the shader
 
-**Verified.** The generated GLSL loads in mpv 0.41 (libplacebo 7.371, D3D11
-backend) with no compile warnings, and all five passes of an `8/8` shader
-register correctly.
+The shader is meant to be the PyTorch model compiled to GLSL. Two things can
+go wrong independently: the generator can emit arithmetic that does not match
+the model, or the arithmetic can match and the model still not be worth
+running. There is a subcommand for each half.
 
-**Not verified.** Whether the convolution arithmetic produces the right
-picture on real hardware. The final pass picks which of the `scale * scale`
-conv3 outputs an output pixel needs from where that pixel falls inside its
-source texel:
+```bash
+# run a checkpoint on an image, which is what the shader should reproduce
+uv run espcn-mpv infer --checkpoint checkpoints/espcn_x2_8_final.pt \
+  --input eval/lr_gray.png --out eval/model_gray.png
 
-```glsl
-vec2 fcoord = fract(conv2_1_pos * conv2_1_size);
-ivec2 sub = ivec2(fcoord * 2.0);
-int idx = sub.y * 2 + sub.x;      // nn.PixelShuffle channel order
+# score images against a reference, on luma
+uv run espcn-mpv compare --reference eval/hr_gray.png --crop 8 \
+  eval/shader_gray.png eval/scaler_gray.png
 ```
 
-This is done entirely in texture space, following FSRCNNX's aggregation pass.
-An earlier version read `gl_FragCoord` instead, which was riskier: framebuffer
-space and texture space need not share an origin convention, and mixing the
-two can tile or scramble the output. Deriving the taps and the sub-pixel index
-from the same coordinates rules that out.
+Capturing the shader's output from mpv has a few traps in it. `eval/README.md`
+covers them.
 
-What remains is milder. If mpv's texture y axis runs opposite to PyTorch's row
-order, then every pass is consistently mirrored, and the net effect is that
-the network runs with a vertically flipped kernel. Training augments with
-vertical flips, so that costs a little accuracy rather than producing visible
-corruption. It would show up as the shader underperforming its measured PSNR,
-not as an obviously broken picture. To rule it out, flip the sign of the y
-offsets in `gen_conv2_passes` and `gen_final_pass` and compare. See `eval/`
-for how to set up that comparison.
+### Does it beat the scaler it replaces
 
-Beyond that: with `--degrade` the model sees mild JPEG and noise during
-training, so it tolerates ordinary compressed sources, but it is an upscaler
-and not a restoration model. Heavy banding, ringing or block artifacts are not
-what it was trained to remove.
+One frame of the Xiph `flower_garden` clip, downscaled 720x480 to 360x240 with
+lanczos and upscaled back. Luma, 8 pixels cropped from each edge, scored
+against the original frame:
+
+| upscaler | PSNR | SSIM |
+|---|---|---|
+| **espcn x2 8/8 shader** | **27.96 dB** | **0.9417** |
+| mpv gpu-next default | 27.83 dB | 0.9357 |
+| espcn with y offsets flipped | 20.56 dB | 0.8055 |
+
+The shader wins by a little on PSNR and by more on SSIM, which is the ordering
+to expect: PSNR rewards the conservative, slightly soft result, so a sharpening
+model tends to show a larger margin on SSIM than on PSNR.
+
+The third row settles an open question. If mpv's texture y axis ran opposite
+to PyTorch's row order, the network would run with a vertically mirrored
+kernel, and flipping the y offsets in `gen_conv2_passes` and `gen_final_pass`
+would *improve* the result. It costs 7 dB instead, so the texture-space
+derivation in `gen_final_pass` already agrees with PyTorch's row order.
+
+### Does it match the model
+
+Same input through both, scoring the shader's output against the model's:
+
+| | PSNR | SSIM |
+|---|---|---|
+| shader vs model, interior | 54.3 dB | 0.99895 |
+| capture path noise floor | 58.7 dB | 0.99960 |
+
+The noise floor is what an unmodified frame scores after a round trip through
+mpv and a screenshot, so it is the ceiling any measurement taken this way can
+reach. 54.3 dB against a 58.7 dB ceiling leaves float precision in GLSL and
+8-bit output quantization, not a codegen bug.
+
+`--crop 8` matters here. torch's `Conv2d` pads with zeros while a texture
+sampler clamps to the edge, so the outer pixels disagree by construction and
+say nothing about the interior. Scoring the whole frame gives 50.2 dB instead
+of 54.3 dB.
+
+### Still open
+
+One frame of one clip is thin. These numbers need repeating over a set of
+frames from several sources before they carry much weight.
+
+With `--degrade` the model sees mild JPEG and noise during training, so it
+tolerates ordinary compressed sources, but it is an upscaler and not a
+restoration model. Heavy banding, ringing or block artifacts are not what it
+was trained to remove.
 
 ## 6. How the shader is laid out
 

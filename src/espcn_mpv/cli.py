@@ -8,6 +8,8 @@ commands:
   train      train an ESPCN model on a folder of images
   export     export a trained checkpoint to an .npz weight file
   gen-glsl   generate an mpv custom shader from an .npz weight file
+  infer      upscale one image with a checkpoint (the shader's reference)
+  compare    score images against a reference on luma (PSNR, SSIM)
 
 Run `espcn-mpv <command> --help` for the options of a command.
 """
@@ -33,6 +35,14 @@ def main() -> None:
         from . import gen_glsl
 
         gen_glsl.main()
+    elif command == "infer":
+        from . import infer
+
+        infer.main()
+    elif command == "compare":
+        from . import compare
+
+        compare.main()
     else:
         print(f"unknown command: {command}\n", file=sys.stderr)
         print(USAGE, end="", file=sys.stderr)
