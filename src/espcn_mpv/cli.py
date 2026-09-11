@@ -9,7 +9,8 @@ commands:
   export     export a trained checkpoint to an .npz weight file
   gen-glsl   generate an mpv custom shader from an .npz weight file
   infer      upscale one image with a checkpoint (the shader's reference)
-  compare    score images against a reference on luma (PSNR, SSIM)
+  compare    score images or frame directories against a reference
+  bench      score a checkpoint over frames sampled from clips
 
 Run `espcn-mpv <command> --help` for the options of a command.
 """
@@ -43,6 +44,10 @@ def main() -> None:
         from . import compare
 
         compare.main()
+    elif command == "bench":
+        from . import bench
+
+        bench.main()
     else:
         print(f"unknown command: {command}\n", file=sys.stderr)
         print(USAGE, end="", file=sys.stderr)

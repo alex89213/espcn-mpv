@@ -53,7 +53,7 @@ identical and just make an epoch slower without adding information:
 
 ```bash
 # one frame every 120 (~ every 5s at 24fps), as high-quality PNGs
-ffmpeg -i show.mkv -vf "select=not(mod(n\,120))" -vsync vfr data/animation/show_%05d.png
+ffmpeg -i show.mkv -vf "select=not(mod(n\,120))" -fps_mode vfr data/animation/show_%05d.png
 ```
 
 Use sources that are actually sharp. The training pairs are made by
@@ -199,11 +199,15 @@ the model, or the arithmetic can match and the model still not be worth
 running. There is a subcommand for each half.
 
 ```bash
-# run a checkpoint on an image, which is what the shader should reproduce
+# score a checkpoint over frames sampled from clips
+uv run espcn-mpv bench --checkpoint checkpoints/espcn_x2_8_final.pt \
+  --frames 12 eval/*.y4m eval/*.mkv
+
+# run a checkpoint on one image, which is what the shader should reproduce
 uv run espcn-mpv infer --checkpoint checkpoints/espcn_x2_8_final.pt \
   --input eval/lr_gray.png --out eval/model_gray.png
 
-# score images against a reference, on luma
+# score images or whole frame directories against a reference, on luma
 uv run espcn-mpv compare --reference eval/hr_gray.png --crop 8 \
   eval/shader_gray.png eval/scaler_gray.png
 ```
@@ -211,27 +215,47 @@ uv run espcn-mpv compare --reference eval/hr_gray.png --crop 8 \
 Capturing the shader's output from mpv has a few traps in it. `eval/README.md`
 covers them.
 
-### Does it beat the scaler it replaces
+### Does it beat the filters it replaces
 
-One frame of the Xiph `flower_garden` clip, downscaled 720x480 to 360x240 with
-lanczos and upscaled back. Luma, 8 pixels cropped from each edge, scored
-against the original frame:
+12 frames from each of four clips, 48 in total: Xiph `flower_garden`,
+`parkrun` and `shields`, plus a segment of Big Buck Bunny. Each frame is
+downscaled 2x with lanczos in gamma light and upscaled back, then scored on
+luma against the original.
 
-| upscaler | PSNR | SSIM |
+| upscaler | MAE | PSNR | SSIM | MS-SSIM |
+|---|---|---|---|---|
+| **espcn x2 8/8** | **0.02478** | **28.90 dB** | **0.8992** | **0.99100** |
+| lanczos | 0.02535 | 28.55 dB | 0.8861 | 0.98924 |
+| bicubic | 0.02661 | 28.06 dB | 0.8742 | 0.98799 |
+
+It wins every metric on every clip, by +0.35 dB over lanczos and +0.84 dB over
+bicubic. The margin is widest on `parkrun`, which is the densest, highest
+frequency clip of the four, and narrowest on `flower_garden`.
+
+Note the shape of the win. PSNR moves by about 1%, SSIM by 1.5%, MS-SSIM by
+less in absolute terms but from a much higher floor. PSNR rewards the
+conservative, slightly soft answer, so a model that adds detail tends to show
+a smaller PSNR margin than its perceptual one. Reporting only PSNR would
+undersell this, and reporting only SSIM would oversell it.
+
+The +0.35 dB over lanczos lines up with the +0.32 dB the `--degrade` table in
+section 3 predicts for lanczos-downscaled input, which is a useful consistency
+check between two independently measured things.
+
+### Is the shader oriented correctly
+
+If mpv's texture y axis ran opposite to PyTorch's row order, the network would
+run with a vertically mirrored kernel, and flipping the y offsets in
+`gen_conv2_passes` and `gen_final_pass` would *improve* the output. On one
+`flower_garden` frame, captured out of mpv:
+
+| shader | PSNR | SSIM |
 |---|---|---|
-| **espcn x2 8/8 shader** | **27.96 dB** | **0.9417** |
-| mpv gpu-next default | 27.83 dB | 0.9357 |
-| espcn with y offsets flipped | 20.56 dB | 0.8055 |
+| as generated | 27.96 dB | 0.9417 |
+| y offsets flipped | 20.56 dB | 0.8055 |
 
-The shader wins by a little on PSNR and by more on SSIM, which is the ordering
-to expect: PSNR rewards the conservative, slightly soft result, so a sharpening
-model tends to show a larger margin on SSIM than on PSNR.
-
-The third row settles an open question. If mpv's texture y axis ran opposite
-to PyTorch's row order, the network would run with a vertically mirrored
-kernel, and flipping the y offsets in `gen_conv2_passes` and `gen_final_pass`
-would *improve* the result. It costs 7 dB instead, so the texture-space
-derivation in `gen_final_pass` already agrees with PyTorch's row order.
+Flipping costs 7 dB, so the texture-space derivation in `gen_final_pass`
+already agrees with PyTorch's row order.
 
 ### Does it match the model
 
@@ -254,8 +278,15 @@ of 54.3 dB.
 
 ### Still open
 
-One frame of one clip is thin. These numbers need repeating over a set of
-frames from several sources before they carry much weight.
+All four clips are photographic or 3D rendered. None of them is hand-drawn
+2D animation, which is a different regime: flat color regions bounded by hard
+ink lines, rather than continuous texture. A shader for that content wants its
+own training run on that content, and its own numbers.
+
+`bench` scores the PyTorch model rather than the compiled shader, because
+driving mpv once per frame is slow. That is only reasonable because the two
+were shown to agree above, and it is worth re-checking after any change to
+the generator.
 
 With `--degrade` the model sees mild JPEG and noise during training, so it
 tolerates ordinary compressed sources, but it is an upscaler and not a
