@@ -1,0 +1,36 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+*.pyc
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv/
+
+# Training sets. Third-party images (DIV2K, frames pulled from video) are not
+# ours to redistribute, so the whole directory stays out of the repo.
+data/
+
+# Evaluation working files: source clips, extracted frames, mpv screenshots.
+# Finished comparison crops belong in docs/images/ instead.
+eval/*
+!eval/.gitkeep
+!eval/README.md
+
+# Project output
+checkpoints/
+weights/
+
+# Generated shaders, except one committed as a reference artifact so the
+# output format is visible without training a model first.
+shaders/*.glsl
+!shaders/espcn_x2_8.glsl
+
+# Logs
+*.log
+
+# OS
+.DS_Store

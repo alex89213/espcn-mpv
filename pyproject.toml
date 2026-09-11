@@ -1,0 +1,35 @@
+[project]
+name = "espcn-mpv"
+version = "0.1.0"
+description = "Train a small ESPCN super-resolution model and compile it into an mpv custom shader"
+readme = "README.md"
+authors = [
+    { name = "Alex", email = "ahwu@wisc.edu" }
+]
+requires-python = ">=3.13"
+dependencies = [
+    "numpy",
+    "pillow",
+    "torch",
+    "torchvision",
+    "tqdm",
+]
+
+[project.scripts]
+espcn-mpv = "espcn_mpv.cli:main"
+
+[build-system]
+requires = ["uv_build>=0.12.5,<0.13.0"]
+build-backend = "uv_build"
+
+# torch/torchvision come from the CUDA 12.6 wheel index; everything else
+# (numpy, pillow, tqdm) still resolves from PyPI. `explicit = true` keeps uv
+# from searching the narrow pytorch mirror for unrelated packages.
+[tool.uv.sources]
+torch = { index = "pytorch-cu126" }
+torchvision = { index = "pytorch-cu126" }
+
+[[tool.uv.index]]
+name = "pytorch-cu126"
+url = "https://download.pytorch.org/whl/cu126"
+explicit = true
