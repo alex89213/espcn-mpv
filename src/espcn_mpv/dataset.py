@@ -11,11 +11,11 @@ from torch.utils.data import Dataset
 
 IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".bmp", ".webp"}
 
-# Downscale kernels drawn from when `degrade` is on. A model trained only on
+# Kernels to draw from when `degrade` is on. A model trained only on
 # bicubic-downscaled pairs learns to invert bicubic specifically, and measures
-# well only when the test input was made the same way; on video resized by
+# well only when the test input was made the same way. On video resized by
 # some other resampler the advantage over plain lanczos disappears. Sampling
-# the kernel keeps the model from specialising on one of them.
+# the kernel keeps the model from specializing on one of them.
 DOWNSCALE_FILTERS = (Image.BICUBIC, Image.BILINEAR, Image.BOX, Image.LANCZOS)
 DOWNSCALE_WEIGHTS = (0.4, 0.2, 0.2, 0.2)
 
@@ -87,10 +87,9 @@ class PatchDataset(Dataset):
         """Produce the LR counterpart of an HR patch.
 
         Without `degrade` this is a plain bicubic downscale. With it, the LR
-        side goes through a randomized approximation of what happens to real
-        video on its way to your screen: a little source softness, some
-        resampler that isn't necessarily bicubic, and lossy compression.
-        The HR target is always left clean.
+        side gets a randomized approximation of what real video goes through:
+        a little source softness, some resampler that is not necessarily
+        bicubic, and lossy compression. The HR target is always left clean.
         """
         size = (self.patch_size // self.scale,) * 2
         if not self.degrade:

@@ -1,6 +1,6 @@
 """Compile exported ESPCN weights into an mpv custom shader (.glsl).
 
-Layout follows the conventions used by the established mpv neural upscalers
+Layout follows the conventions used by the existing mpv neural upscalers
 (igv's FSRCNNX, bjin's mpv-prescalers):
 
 - Each layer's feature channels are packed four-per-RGBA-texture. A layer
@@ -151,7 +151,7 @@ def gen_conv2_passes(w, b, d1: int, d2: int, name: str) -> list[str]:
 
 
 # The final pass fuses conv3 with the sub-pixel shuffle. Which of the
-# scale*scale conv3 outputs a given output pixel needs is decided by where the
+# scale*scale conv3 outputs a given output pixel needs depends on where that
 # pixel falls inside its source texel, computed entirely in texture space:
 #
 #     fcoord = fract(conv2_pos * conv2_size)   // position within the texel
@@ -159,21 +159,21 @@ def gen_conv2_passes(w, b, d1: int, d2: int, name: str) -> list[str]:
 #     idx    = sub.y * scale + sub.x           // nn.PixelShuffle channel order
 #
 # This follows FSRCNNX's aggregation pass rather than reading gl_FragCoord.
-# It matters: gl_FragCoord lives in framebuffer space, whose origin convention
-# need not agree with the texture space that texOff samples in, so mixing the
-# two can tile or scramble the output. Deriving both the taps and the
-# sub-pixel index from the same texture coordinates keeps them consistent.
+# gl_FragCoord lives in framebuffer space, whose origin convention need not
+# agree with the texture space that texOff samples in, so mixing the two can
+# tile or scramble the output. Taking both the taps and the sub-pixel index
+# from the same texture coordinates avoids that.
 #
 # `base` snaps the sample position to the center of the source texel before
 # the neighborhood offsets are applied, so each tap lands on exactly one texel
-# regardless of whether the texture is sampled linear or nearest.
+# whether the texture is sampled linear or nearest.
 #
-# One residual caveat that still needs a real GPU to settle: if mpv's texture
-# y axis runs opposite to PyTorch's row order, the network runs with a
-# vertically mirrored kernel. Because training augments with vertical flips
-# that costs a little accuracy rather than producing visible corruption, but
-# if the output looks soft in a way the PSNR numbers don't predict, flip the
-# sign of the y offsets here and in gen_conv2_passes and regenerate.
+# Still unverified, and it needs a real GPU to settle: if mpv's texture y axis
+# runs opposite to PyTorch's row order, the network runs with a vertically
+# mirrored kernel. Training augments with vertical flips, so that costs a
+# little accuracy rather than producing visible corruption. If the output
+# looks soft in a way the PSNR numbers do not predict, flip the sign of the y
+# offsets here and in gen_conv2_passes and regenerate.
 def gen_final_pass(w, b, d2: int, scale: int, name: str) -> str:
     """3x3 conv (d2 -> scale*scale) fused with the pixel shuffle."""
     in_names = textures("conv2", d2)

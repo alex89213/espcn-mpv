@@ -5,7 +5,7 @@ Sub-Pixel Convolutional Neural Network".
 
 The paper uses d1=64, d2=32. The GLSL generator packs feature channels four
 per RGBA texture and splits wider layers across several textures, so any
-width works; cost in the shader grows with ceil(d/4) textures per layer and
+width works. Cost in the shader grows with ceil(d/4) textures per layer, plus
 d1*d2 multiply-adds per output pixel in conv2. d1=8, d2=8 is a reasonable
 middle ground for real-time playback.
 """
@@ -38,11 +38,11 @@ class ESPCN(nn.Module):
         nn.init.kaiming_normal_(self.conv2.weight, nonlinearity="relu")
 
         # The output layer starts near zero rather than at kaiming scale. With
-        # only 4 channels per hidden layer there is no redundancy to spare, and
-        # a kaiming-scaled conv3 makes the initial output ~2x the target range;
-        # Adam's first steps then shrink the net hard enough to push most conv2
-        # units permanently below zero. Measured over 600 steps on DIV2K:
-        # kaiming throughout left 2 of 4 conv2 channels dead and reached
+        # only 4 channels per hidden layer there is no redundancy to spare. A
+        # kaiming-scaled conv3 makes the initial output about 2x the target
+        # range, and Adam's first steps then shrink the net hard enough to push
+        # most conv2 units permanently below zero. Measured over 600 steps on
+        # DIV2K: kaiming throughout left 2 of 4 conv2 channels dead and reached
         # 19.6 dB, versus 26.1 dB with all 4 alive using the init below.
         nn.init.normal_(self.conv3.weight, mean=0.0, std=0.001)
 

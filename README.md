@@ -246,7 +246,7 @@ Reference implementations worth reading next to `gen_glsl.py`:
 
 - [igv/FSRCNN-TensorFlow](https://github.com/igv/FSRCNN-TensorFlow) is the
   source of the FSRCNNX shaders. The multi-texture packing and the aggregation
-  pass this generator's final pass is modelled on both come from there.
+  pass this generator's final pass is modeled on both come from there.
 - [bjin/mpv-prescalers](https://github.com/bjin/mpv-prescalers) has RAVU and
   nnedi3 as generated GLSL. RAVU is a learned *filter bank* (RAISR-style
   gradient hashing) rather than a CNN, and stores its weights in a lookup
