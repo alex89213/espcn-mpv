@@ -21,6 +21,7 @@ import shutil
 import subprocess
 from pathlib import Path
 
+import numpy
 import torch
 from PIL import Image
 
@@ -120,6 +121,31 @@ def extract(clip: Path, out: Path, count: int) -> list[Path]:
     return sorted(out.glob("*.png"))
 
 
+def detail(path: Path) -> float:
+    """Mean gradient magnitude of a frame's luma, on a 0-255 scale."""
+    array = numpy.asarray(Image.open(path).convert("L"), dtype=numpy.float32)
+    gy, gx = numpy.gradient(array)
+    return float(numpy.hypot(gx, gy).mean())
+
+
+def drop_flat(paths: list[Path], fraction: float = 0.25) -> list[Path]:
+    """Discard frames with far less detail than the clip's median.
+
+    Test clips often open on a grey or black leader, and fades and cuts to
+    black land in an evenly spaced sample too. Those frames are trivial for
+    any upscaler, so including them pulls every method toward the same score
+    and understates the differences the benchmark exists to measure.
+
+    The threshold is relative to the clip so a legitimately soft source is not
+    thrown away wholesale.
+    """
+    if len(paths) < 3:
+        return paths
+    scores = [detail(p) for p in paths]
+    cutoff = fraction * sorted(scores)[len(scores) // 2]
+    return [p for p, score in zip(paths, scores) if score >= cutoff]
+
+
 def build_pair(path: Path, scale: int, kernel: int) -> tuple[Image.Image, Image.Image]:
     """(HR luma, LR luma) for one frame, cropped to a multiple of `scale`."""
     image = Image.open(path).convert("RGB").convert("YCbCr").getchannel("Y")
@@ -166,6 +192,13 @@ def main() -> None:
         if not extracted:
             print(f"{clip.name}: no frames extracted, skipping")
             continue
+
+        kept = drop_flat(extracted)
+        if len(kept) < len(extracted):
+            names = ", ".join(p.name for p in extracted if p not in kept)
+            print(f"{clip.name}: skipping {len(extracted) - len(kept)} flat frames "
+                  f"({names})")
+        extracted = kept
 
         for directory in ("hr", "lr", *methods):
             (root / directory).mkdir(parents=True, exist_ok=True)
