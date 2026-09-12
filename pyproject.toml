@@ -26,7 +26,7 @@ dependencies = [
 ]
 
 [project.urls]
-Repository = "https://github.com/ahwu/espcn-mpv"
+Repository = "https://github.com/alex89213/espcn-mpv"
 
 [project.scripts]
 espcn-mpv = "espcn_mpv.cli:main"
