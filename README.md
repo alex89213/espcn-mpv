@@ -26,6 +26,14 @@ and a sub-pixel shuffle that turns those channels into the upscaled image.
 `shaders/espcn_x2_8.glsl` is a generated example so you can see the output
 format without training anything first.
 
+![parkrun comparison](docs/images/parkrun-comparison.png)
+
+![Big Buck Bunny comparison](docs/images/bbb-comparison.png)
+
+640x360 upscaled 2x to 1280x720, shown at 100%. These are luma only, which is
+all the shader touches. The crops are the regions where the two upscalers
+disagree most, picked by search rather than by eye. Numbers are in section 5.
+
 ## 1. Getting a training set
 
 No training images ship with this repo. They aren't mine to redistribute, so
@@ -217,20 +225,25 @@ covers them.
 
 ### Does it beat the filters it replaces
 
-12 frames from each of four clips, 48 in total: Xiph `flower_garden`,
-`parkrun` and `shields`, plus a segment of Big Buck Bunny. Each frame is
-downscaled 2x with lanczos in gamma light and upscaled back, then scored on
-luma against the original.
+12 frames from each of four clips: Xiph `flower_garden`, `parkrun` and
+`shields`, plus a segment of Big Buck Bunny. Each frame is downscaled 2x with
+lanczos in gamma light and upscaled back, then scored on luma against the
+original. Two frames are dropped as flat, leaving 46.
 
 | upscaler | MAE | PSNR | SSIM | MS-SSIM |
 |---|---|---|---|---|
-| **espcn x2 8/8** | **0.02478** | **28.90 dB** | **0.8992** | **0.99100** |
-| lanczos | 0.02535 | 28.55 dB | 0.8861 | 0.98924 |
-| bicubic | 0.02661 | 28.06 dB | 0.8742 | 0.98799 |
+| **espcn x2 8/8** | **0.02557** | **28.35 dB** | **0.8978** | **0.99088** |
+| lanczos | 0.02617 | 27.99 dB | 0.8842 | 0.98907 |
+| bicubic | 0.02748 | 27.48 dB | 0.8718 | 0.98777 |
 
-It wins every metric on every clip, by +0.35 dB over lanczos and +0.84 dB over
-bicubic. The margin is widest on `parkrun`, which is the densest, highest
-frequency clip of the four, and narrowest on `flower_garden`.
+It wins every metric on every clip, by +0.36 dB over lanczos and +0.87 dB over
+bicubic. The margin is widest on `parkrun`, the densest and highest frequency
+clip of the four, and narrowest on `flower_garden`.
+
+`bench` drops frames whose detail falls far below the clip's median. Both
+`parkrun` and `shields` open on a flat grey leader, and a frame like that is
+trivial for any upscaler, so leaving it in pulls every method toward the same
+score and hides the differences the benchmark exists to find.
 
 Note the shape of the win. PSNR moves by about 1%, SSIM by 1.5%, MS-SSIM by
 less in absolute terms but from a much higher floor. PSNR rewards the
@@ -288,6 +301,14 @@ driving mpv once per frame is slow. That is only reasonable because the two
 were shown to agree above, and it is worth re-checking after any change to
 the generator.
 
+Training and playback do not use quite the same definition of luma. Pillow's
+`convert("YCbCr")`, which `dataset.py` uses to build pairs, is BT.601
+full-range, while mpv hands the shader BT.709 luma for HD content. Measured on
+a real 720p frame the two are 57 dB apart, mean 0.28/255 and max 1.58/255, so
+it is well below the margins above and has not been worth restructuring the
+pipeline over. It may matter more on saturated palettes, where the BT.601 and
+BT.709 coefficients diverge most.
+
 With `--degrade` the model sees mild JPEG and noise during training, so it
 tolerates ordinary compressed sources, but it is an upscaler and not a
 restoration model. Heavy banding, ringing or block artifacts are not what it
@@ -328,7 +349,8 @@ for its convolution taps.
 ## Repository layout
 
 ```
-src/espcn_mpv/    model, dataset, training, weight export, GLSL generator
+src/espcn_mpv/    model, dataset, training, export, GLSL generator, metrics
+tests/            unit tests, run with `uv run pytest`
 shaders/          generated .glsl (one example committed, rest gitignored)
 eval/             scratch space for validating a shader, see eval/README.md
 docs/images/      before/after crops used in this README
@@ -336,3 +358,25 @@ data/             training sets, gitignored
 checkpoints/      training output, gitignored
 weights/          exported .npz, gitignored
 ```
+
+## Development
+
+```bash
+uv sync --group dev
+uv run pytest
+```
+
+The tests cover the parts where a mistake is silent rather than loud. A
+transposed convolution kernel or an off-by-one in the channel packing still
+produces a shader that compiles and runs, so `tests/test_gen_glsl.py` parses
+the emitted weight literals back out and checks them against the weights that
+went in. The metric tests pin down the properties the hand-rolled PSNR, SSIM
+and MS-SSIM implementations are supposed to have.
+
+## License
+
+MIT, see [LICENSE](LICENSE).
+
+Test media in the comparison images is not mine: Big Buck Bunny is CC BY 3.0
+by the Blender Foundation, and `parkrun` comes from the Xiph.org test media
+collection. No training data ships with this repository.
