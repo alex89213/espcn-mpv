@@ -3,6 +3,7 @@
 import io
 import random
 from pathlib import Path
+from typing import override
 
 import torch
 import torchvision.transforms.functional as TF
@@ -16,11 +17,16 @@ IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".bmp", ".webp"}
 # well only when the test input was made the same way. On video resized by
 # some other resampler the advantage over plain lanczos disappears. Sampling
 # the kernel keeps the model from specializing on one of them.
-DOWNSCALE_FILTERS = (Image.BICUBIC, Image.BILINEAR, Image.BOX, Image.LANCZOS)
+DOWNSCALE_FILTERS = (
+    Image.Resampling.BICUBIC,
+    Image.Resampling.BILINEAR,
+    Image.Resampling.BOX,
+    Image.Resampling.LANCZOS,
+)
 DOWNSCALE_WEIGHTS = (0.4, 0.2, 0.2, 0.2)
 
 
-class PatchDataset(Dataset):
+class PatchDataset(Dataset[tuple[torch.Tensor, torch.Tensor]]):
     def __init__(
         self,
         image_dir: str | Path,
@@ -35,14 +41,14 @@ class PatchDataset(Dataset):
                 f"patch_size ({patch_size}) must be divisible by scale ({scale})"
             )
 
-        self.image_dir = Path(image_dir)
-        self.scale = scale
-        self.patch_size = patch_size
-        self.patches_per_image = patches_per_image
-        self.augment = augment
-        self.degrade = degrade
+        self.image_dir: Path = Path(image_dir)
+        self.scale: int = scale
+        self.patch_size: int = patch_size
+        self.patches_per_image: int = patches_per_image
+        self.augment: bool = augment
+        self.degrade: bool = degrade
 
-        self.paths = sorted(
+        self.paths: list[Path] = sorted(
             p
             for p in self.image_dir.rglob("*")
             if p.is_file() and p.suffix.lower() in IMAGE_EXTENSIONS
@@ -64,14 +70,14 @@ class PatchDataset(Dataset):
             ratio = max(self.patch_size / w, self.patch_size / h)
             new_size = (max(self.patch_size, round(w * ratio)),
                         max(self.patch_size, round(h * ratio)))
-            img = img.resize(new_size, Image.BICUBIC)
+            img = img.resize(new_size, Image.Resampling.BICUBIC)
         return img
 
     def _augment(self, patch: Image.Image) -> Image.Image:
         if random.random() < 0.5:
-            patch = patch.transpose(Image.FLIP_LEFT_RIGHT)
+            patch = patch.transpose(Image.Transpose.FLIP_LEFT_RIGHT)
         if random.random() < 0.5:
-            patch = patch.transpose(Image.FLIP_TOP_BOTTOM)
+            patch = patch.transpose(Image.Transpose.FLIP_TOP_BOTTOM)
         angle = random.choice((0, 90, 180, 270))
         if angle:
             patch = patch.rotate(angle, expand=True)
@@ -79,7 +85,7 @@ class PatchDataset(Dataset):
             # back to patch_size x patch_size so batching stays uniform.
             if patch.size != (self.patch_size, self.patch_size):
                 patch = patch.resize(
-                    (self.patch_size, self.patch_size), Image.BICUBIC
+                    (self.patch_size, self.patch_size), Image.Resampling.BICUBIC
                 )
         return patch
 
@@ -91,9 +97,10 @@ class PatchDataset(Dataset):
         a little source softness, some resampler that is not necessarily
         bicubic, and lossy compression. The HR target is always left clean.
         """
-        size = (self.patch_size // self.scale,) * 2
+        side = self.patch_size // self.scale
+        size = (side, side)
         if not self.degrade:
-            return hr.resize(size, Image.BICUBIC)
+            return hr.resize(size, Image.Resampling.BICUBIC)
 
         lr = hr
         if random.random() < 0.35:
@@ -110,6 +117,7 @@ class PatchDataset(Dataset):
 
         return lr
 
+    @override
     def __getitem__(self, index: int) -> tuple[torch.Tensor, torch.Tensor]:
         img = self._load(self.paths[index // self.patches_per_image])
 

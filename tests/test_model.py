@@ -1,5 +1,7 @@
 """Tests for the network and the dataset's input validation."""
 
+from pathlib import Path
+
 import pytest
 import torch
 
@@ -34,11 +36,11 @@ def test_untrained_output_is_in_a_sane_range() -> None:
     assert out.abs().max() < 1.0
 
 
-def test_patch_size_must_divide_by_scale(tmp_path) -> None:
+def test_patch_size_must_divide_by_scale(tmp_path: Path) -> None:
     with pytest.raises(ValueError, match="divisible"):
         PatchDataset(tmp_path, scale=2, patch_size=97)
 
 
-def test_empty_directory_is_an_error(tmp_path) -> None:
+def test_empty_directory_is_an_error(tmp_path: Path) -> None:
     with pytest.raises(FileNotFoundError, match="no images"):
         PatchDataset(tmp_path, scale=2, patch_size=96)

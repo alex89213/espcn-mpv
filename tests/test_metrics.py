@@ -7,6 +7,7 @@ for MS-SSIM's five scales.
 """
 
 import math
+from pathlib import Path
 
 import pytest
 import torch
@@ -76,7 +77,7 @@ def test_compare_rejects_mismatched_shapes() -> None:
         metrics.compare(image(64, 64), image(32, 32))
 
 
-def test_luma_round_trip_through_disk(tmp_path) -> None:
+def test_luma_round_trip_through_disk(tmp_path: Path) -> None:
     """save_luma then load_luma should be lossless to 8-bit quantization."""
     original = image(32, 32)
     path = tmp_path / "frame.png"
@@ -84,7 +85,7 @@ def test_luma_round_trip_through_disk(tmp_path) -> None:
     assert metrics.psnr(original, metrics.load_luma(path)) > 48.0
 
 
-def test_save_luma_clamps_out_of_range_values(tmp_path) -> None:
+def test_save_luma_clamps_out_of_range_values(tmp_path: Path) -> None:
     """ReLU output can exceed 1.0; writing it must not wrap around."""
     path = tmp_path / "frame.png"
     metrics.save_luma(torch.tensor([[[[-0.5, 0.5, 1.5]]]]), path)

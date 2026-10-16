@@ -13,9 +13,8 @@ it often enough to be worth printing alongside.
 import argparse
 from pathlib import Path
 
-from .metrics import METRICS
+from .metrics import METRICS, load_luma
 from .metrics import compare as compare_pair
-from .metrics import load_luma
 
 IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".bmp", ".webp"}
 
@@ -112,7 +111,7 @@ def main() -> None:
     reference = frames(args.reference)
     print(f"reference: {args.reference}")
 
-    rows = []
+    rows: list[tuple[str, dict[str, float]]] = []
     for target in args.images:
         label = Path(target).name
         try:

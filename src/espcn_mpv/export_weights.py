@@ -32,6 +32,9 @@ def main() -> None:
     model = ESPCN(scale, d1, d2)
     model.load_state_dict(checkpoint["model"])
     model.eval()
+    assert model.conv1.bias is not None
+    assert model.conv2.bias is not None
+    assert model.conv3.bias is not None
 
     # Conv2d weight is already (out_channels, in_channels, kh, kw).
     np.savez(

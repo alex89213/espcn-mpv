@@ -29,15 +29,15 @@ from .metrics import METRICS, compare, load_luma, save_luma
 from .model import ESPCN
 
 KERNELS = {
-    "lanczos": Image.LANCZOS,
-    "bicubic": Image.BICUBIC,
-    "bilinear": Image.BILINEAR,
-    "box": Image.BOX,
+    "lanczos": Image.Resampling.LANCZOS,
+    "bicubic": Image.Resampling.BICUBIC,
+    "bilinear": Image.Resampling.BILINEAR,
+    "box": Image.Resampling.BOX,
 }
 
 # Baselines the model has to beat. Bicubic is the reference point the README
 # quotes; lanczos is what mpv reaches for by default and is the harder target.
-BASELINES = {"bicubic": Image.BICUBIC, "lanczos": Image.LANCZOS}
+BASELINES = {"bicubic": Image.Resampling.BICUBIC, "lanczos": Image.Resampling.LANCZOS}
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -115,6 +115,7 @@ def extract(clip: Path, out: Path, count: int) -> list[Path]:
         ],
         capture_output=True,
         text=True,
+        check=False,
     )
     if result.returncode != 0:
         raise SystemExit(f"ffmpeg failed on {clip.name}:\n{result.stderr.strip()}")
@@ -146,7 +147,9 @@ def drop_flat(paths: list[Path], fraction: float = 0.25) -> list[Path]:
     return [p for p, score in zip(paths, scores) if score >= cutoff]
 
 
-def build_pair(path: Path, scale: int, kernel: int) -> tuple[Image.Image, Image.Image]:
+def build_pair(
+    path: Path, scale: int, kernel: Image.Resampling
+) -> tuple[Image.Image, Image.Image]:
     """(HR luma, LR luma) for one frame, cropped to a multiple of `scale`."""
     image = Image.open(path).convert("RGB").convert("YCbCr").getchannel("Y")
     width = image.width - image.width % scale

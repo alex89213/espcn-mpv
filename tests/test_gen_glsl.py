@@ -15,7 +15,7 @@ import pytest
 from espcn_mpv import gen_glsl
 
 
-def weights(scale: int = 2, d1: int = 8, d2: int = 8, seed: int = 0) -> dict:
+def weights(scale: int = 2, d1: int = 8, d2: int = 8, seed: int = 0) -> dict[str, np.ndarray]:
     """A weight set shaped like export_weights.py's .npz output."""
     rng = np.random.default_rng(seed)
     return {
